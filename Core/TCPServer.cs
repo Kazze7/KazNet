@@ -7,15 +7,15 @@ namespace KazNet.Core
 {
     public class TCPServer
     {
-        TCPServerConfig serverConfig;
-        public string Address { get => serverConfig.address; }
-        public ushort Port { get => serverConfig.port; }
+        ServerNetworkConfig networkConfig;
+        public string Address { get => networkConfig.address; }
+        public ushort Port { get => networkConfig.port; }
 
         NetworkStatus networkStatus = NetworkStatus.stopped;
         public NetworkStatus GetNetworkStatus { get => networkStatus; }
 
         Socket serverSocket;
-        ConcurrentDictionary<int, ServerThread> serverThreads = new ConcurrentDictionary<int, ServerThread>();
+        ConcurrentDictionary<int, NetworkThread> networkThreads = new ConcurrentDictionary<int, NetworkThread>();
         ConcurrentDictionary<Socket, Client> clients = new ConcurrentDictionary<Socket, Client>();
 
         public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, Socket? _socket);
@@ -28,14 +28,14 @@ namespace KazNet.Core
         DecodeMethod decodeMethod;
 
         public TCPServer(
-            TCPServerConfig _serverConfig,
+            ServerNetworkConfig _networkConfig,
             NetworkStatusMethod _networkStatus = null,
             ConnectMethod _connect = null,
             DisconnectMethod _disconnect = null,
             DecodeMethod _decodePacket = null
             )
         {
-            serverConfig = _serverConfig;
+            networkConfig = _networkConfig;
             networkStatusMethod = _networkStatus;
             connectMethod = _connect;
             disconnectMethod = _disconnect;
@@ -60,16 +60,16 @@ namespace KazNet.Core
                 //  Close server socket
                 serverSocket?.Close();
                 //  Close threads
-                serverThreads.ToList().ForEach(serverThread =>
+                networkThreads.ToList().ForEach(networkThread =>
                 {
-                    serverThread.Value.sendingWorker.Stop();
-                    serverThread.Value.receivingWorker.Stop();
-                    serverThread.Value.nextClientEvent.Set();
-                    serverThread.Value.connectionThread?.Join();
-                    serverThreads.TryRemove(serverThread);
+                    networkThread.Value.sendingWorker.Stop();
+                    networkThread.Value.receivingWorker.Stop();
+                    networkThread.Value.nextClientEvent.Set();
+                    networkThread.Value.connectionWorker?.Join();
+                    networkThreads.TryRemove(networkThread);
                 });
                 //  Clear dictionary
-                serverThreads = new ConcurrentDictionary<int, ServerThread>();
+                networkThreads = new ConcurrentDictionary<int, NetworkThread>();
                 clients = new ConcurrentDictionary<Socket, Client>();
             }
         }
@@ -91,9 +91,9 @@ namespace KazNet.Core
             try
             {
                 serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                serverSocket.Bind(new IPEndPoint(IPAddress.Any, serverConfig.port));
-                serverConfig.SetServerConfig(serverSocket);
-                serverSocket.Listen(serverConfig.backLog);
+                serverSocket.Bind(new IPEndPoint(IPAddress.Any, networkConfig.port));
+                networkConfig.SetConfig(serverSocket);
+                serverSocket.Listen(networkConfig.backLog);
                 ChangeNetworkStatus(NetworkStatus.launched, serverSocket);
             }
             catch (Exception exception)
@@ -108,20 +108,20 @@ namespace KazNet.Core
             for (int i = 0; i < Environment.ProcessorCount; i++)
             {
                 int id = i;
-                ServerThread serverThread = new ServerThread();
-                if (serverThreads.TryAdd(id, serverThread))
+                NetworkThread network = new NetworkThread();
+                if (networkThreads.TryAdd(id, network))
                 {
-                    serverThread.connectionThread = new Thread(() =>
+                    network.connectionWorker = new Thread(() =>
                     {
-                        serverThreads[id].nextClientEvent.WaitOne();
+                        networkThreads[id].nextClientEvent.WaitOne();
                         while (networkStatus == NetworkStatus.launched)
                         {
-                            serverSocket.BeginAccept(new AsyncCallback(AcceptConnection), serverThreads[id]);
-                            serverThreads[id].nextClientEvent.WaitOne();
+                            serverSocket.BeginAccept(new AsyncCallback(AcceptConnection), networkThreads[id]);
+                            networkThreads[id].nextClientEvent.WaitOne();
                         }
                     });
-                    serverThread.receivingWorker = new QueueWorker<Packet>(_packet => { decodeMethod?.Invoke(_packet); });
-                    serverThread.sendingWorker = new QueueWorker<Packet>(_packet =>
+                    network.receivingWorker = new QueueWorker<Packet>(_packet => { decodeMethod?.Invoke(_packet); });
+                    network.sendingWorker = new QueueWorker<Packet>(_packet =>
                     {
                         try
                         {
@@ -142,10 +142,10 @@ namespace KazNet.Core
                                         //  Log to file
                                         //  Console.WriteLine(exception.ToString());
                                     }
-                                    serverThreads[id].nextSendEvent.Set();
+                                    networkThreads[id].nextSendEvent.Set();
                                 }
                                 ), _packet.socket);
-                            serverThreads[id].nextSendEvent.WaitOne();
+                            networkThreads[id].nextSendEvent.WaitOne();
                         }
                         catch (Exception exception)
                         {
@@ -154,22 +154,22 @@ namespace KazNet.Core
                             //  Console.WriteLine(exception.ToString());
                         }
                     });
-                    serverThread.connectionThread.Start();
-                    serverThread.receivingWorker.Start();
-                    serverThread.sendingWorker.Start();
+                    network.connectionWorker.Start();
+                    network.receivingWorker.Start();
+                    network.sendingWorker.Start();
                 }
             }
             UnlockNextClient();
         }
         void UnlockNextClient()
         {
-            serverThreads.Values.OrderBy(x => x.clientCount).First().nextClientEvent.Set();
+            networkThreads.Values.OrderBy(x => x.connectionCount).First().nextClientEvent.Set();
         }
 
         void AcceptConnection(IAsyncResult _asyncResult)
         {
             UnlockNextClient();
-            ServerThread serverThread = (ServerThread)_asyncResult.AsyncState;
+            NetworkThread network = (NetworkThread)_asyncResult.AsyncState;
             Socket clientSocket;
             try
             {
@@ -183,17 +183,17 @@ namespace KazNet.Core
                 return;
             }
             if (networkStatus == NetworkStatus.launched)
-                if (clients.Count <= serverConfig.maxClients)
+                if (clients.Count <= networkConfig.maxClients)
                 {
-                    Client client = new Client(clientSocket, serverThread, serverConfig.bufferSize);
-                    serverConfig.SetClientConfig(client.socket);
+                    Client client = new Client(clientSocket, network, networkConfig.bufferSize);
+                    networkConfig.SetConfig(client.socket);
                     //  Add new client
                     if (clients.TryAdd(client.socket, client))
                     {
-                        serverThread.clientCount++;
+                        network.connectionCount++;
                         connectMethod?.Invoke(client.socket);
                     }
-                    client.socket.BeginReceive(client.buffer, 0, serverConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
+                    client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
                     return;
                 }
                 else
@@ -227,11 +227,11 @@ namespace KazNet.Core
                     index += 2;
                     packetData = new byte[packetLength];
                     Array.Copy(client.buffer, index, packetData, 0, packetLength);
-                    client.serverThread.receivingWorker.Enqueue(new Packet(client.socket, packetData));
+                    client.network.receivingWorker.Enqueue(new Packet(client.socket, packetData));
                     index += packetLength;
                 }
                 while (index < packetSize);
-                client.socket.BeginReceive(client.buffer, 0, serverConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
+                client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
                 return;
             }
             SendNetworkStatus(NetworkStatus.errorRecivePacket, client.socket);
@@ -243,13 +243,13 @@ namespace KazNet.Core
         public void Send(Packet _packet)
         {
             if (clients.TryGetValue(_packet.socket, out Client client))
-                client.serverThread.sendingWorker.Enqueue(_packet);
+                client.network.sendingWorker.Enqueue(_packet);
         }
         public void Disconnect(Socket _socket)
         {
             if (clients.TryRemove(_socket, out Client client))
             {
-                client.serverThread.clientCount--;
+                client.network.connectionCount--;
                 disconnectMethod?.Invoke(_socket);
             }
             _socket?.Close();

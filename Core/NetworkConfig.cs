@@ -2,7 +2,7 @@
 
 namespace KazNet.Core
 {
-    public class TCPClientConfig
+    public class NetworkConfig
     {
         public string address = "127.0.0.1";
         public ushort port = 12345;
@@ -10,7 +10,7 @@ namespace KazNet.Core
         public int timeout = 1000;
         public bool noDelay = true;
 
-        public void SetClientConfig(Socket _socket)
+        public void SetConfig(Socket _socket)
         {
             _socket.NoDelay = noDelay;
             _socket.ReceiveBufferSize = bufferSize;
@@ -18,5 +18,10 @@ namespace KazNet.Core
             _socket.SendBufferSize = bufferSize;
             _socket.SendTimeout = timeout;
         }
+    }
+    public class ServerNetworkConfig : NetworkConfig
+    {
+        public int backLog = 100;
+        public ushort maxClients = 100;
     }
 }
