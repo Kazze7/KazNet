@@ -6,14 +6,15 @@ namespace KazNet.Core
 {
     public class TCPClient
     {
+        bool isRunning = false;
+        public NetworkStatus GetNetworkStatus { get => isRunning ? NetworkStatus.launched : NetworkStatus.stopped; }
+
         NetworkConfig networkConfig;
         public string Address { get => networkConfig.address; }
         public ushort Port { get => networkConfig.port; }
 
-        NetworkStatus networkStatus = NetworkStatus.stopped;
-        public NetworkStatus GetNetworkStatus { get => networkStatus; }
-
         Client client;
+        AutoResetEvent clientEvent = new(true);
 
         public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, Socket? _socket);
         NetworkStatusMethod networkStatusMethod;
@@ -41,32 +42,32 @@ namespace KazNet.Core
 
         public void Start()
         {
-            if (networkStatus == NetworkStatus.stopped)
+            clientEvent.WaitOne();
+            if (!isRunning)
             {
-                ChangeNetworkStatus(NetworkStatus.started);
+                isRunning = true;
+                SendNetworkStatus(NetworkStatus.started);
                 StartConnection();
             }
+            clientEvent.Set();
         }
         public void Stop()
         {
-            if (networkStatus != NetworkStatus.started)
+            clientEvent.WaitOne();
+            if (isRunning)
             {
-                ChangeNetworkStatus(NetworkStatus.stopped);
-                //  Close client socket
-                client.socket?.Close();
+                isRunning = false;
                 //  Close threads
                 client.network.sendingWorker.Stop();
                 client.network.receivingWorker.Stop();
-                client.network.connectionWorker?.Join();
+                //client.network.connectionWorker.Join();
+                //  Close client socket
+                client.socket.Close();
+                SendNetworkStatus(NetworkStatus.stopped);
             }
+            clientEvent.Set();
         }
 
-        void ChangeNetworkStatus(NetworkStatus _networkStatus) { ChangeNetworkStatus(_networkStatus, null); }
-        void ChangeNetworkStatus(NetworkStatus _networkStatus, Socket? _socket)
-        {
-            networkStatus = _networkStatus;
-            SendNetworkStatus(_networkStatus, _socket);
-        }
         void SendNetworkStatus(NetworkStatus _networkStatus) { SendNetworkStatus(_networkStatus, null); }
         void SendNetworkStatus(NetworkStatus _networkStatus, Socket? _socket)
         {
@@ -88,7 +89,7 @@ namespace KazNet.Core
             catch (Exception exception)
             {
                 SendNetworkStatus(NetworkStatus.errorConnection);
-                ChangeNetworkStatus(NetworkStatus.stopped);
+                Stop();
                 //  Log to file
                 //  Console.WriteLine(exception.ToString());
                 return;
@@ -110,7 +111,7 @@ namespace KazNet.Core
                 Client client = (Client) _asyncResult.AsyncState;
                 client.socket.EndConnect(_asyncResult);
                 networkConfig.SetConfig(client.socket);
-                ChangeNetworkStatus(NetworkStatus.connected);
+                SendNetworkStatus(NetworkStatus.connected);
                 connectMethod?.Invoke(client.socket);
                 client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
             }
