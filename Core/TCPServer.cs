@@ -72,6 +72,7 @@ namespace KazNet.Core
                 });
                 networkThreads.ToList().ForEach(networkThread =>
                 {
+                    networkThread.Value.connectionWorker.Join();
                     networkThreads.TryRemove(networkThread);
                 });
                 //  Close server socket

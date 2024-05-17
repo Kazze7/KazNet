@@ -46,6 +46,7 @@ namespace KazNet.Core
             if (!isRunning)
             {
                 isRunning = true;
+                Console.WriteLine("start");
                 SendNetworkStatus(NetworkStatus.started);
                 StartConnection();
             }
@@ -60,7 +61,7 @@ namespace KazNet.Core
                 //  Close threads
                 client.network.sendingWorker.Stop();
                 client.network.receivingWorker.Stop();
-                //client.network.connectionWorker.Join();
+                client.network.connectionWorker.Join();
                 //  Close client socket
                 client.socket.Close();
                 SendNetworkStatus(NetworkStatus.stopped);
