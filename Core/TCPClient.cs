@@ -46,7 +46,6 @@ namespace KazNet.Core
             if (!isRunning)
             {
                 isRunning = true;
-                Console.WriteLine("start");
                 SendNetworkStatus(NetworkStatus.started);
                 StartConnection();
             }
@@ -101,9 +100,9 @@ namespace KazNet.Core
             });
             client.network.receivingWorker = new QueueWorker<Packet>(_packet => { decodeMethod?.Invoke(_packet); });
             client.network.sendingWorker = new QueueWorker<Packet>(_packet => { SendPacket(_packet); });
-            client.network.connectionWorker.Start();
-            client.network.receivingWorker.Start();
             client.network.sendingWorker.Start();
+            client.network.receivingWorker.Start();
+            client.network.connectionWorker.Start();
         }
         void AcceptConnection(IAsyncResult _asyncResult)
         {
