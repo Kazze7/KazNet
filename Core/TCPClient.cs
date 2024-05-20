@@ -98,8 +98,8 @@ namespace KazNet.Core
             {
                 client.socket.BeginConnect(new IPEndPoint(ipAddress, networkConfig.port), new AsyncCallback(AcceptConnection), client);
             });
-            client.network.receivingWorker = new QueueWorker<Packet>(_packet => { decodeMethod?.Invoke(_packet); });
-            client.network.sendingWorker = new QueueWorker<Packet>(_packet => { SendPacket(_packet); });
+            client.network.receivingWorker = new QueueWorker<Packet>(Decode);
+            client.network.sendingWorker = new QueueWorker<Packet>(SendPacket);
             client.network.sendingWorker.Start();
             client.network.receivingWorker.Start();
             client.network.connectionWorker.Start();
@@ -108,7 +108,7 @@ namespace KazNet.Core
         {
             try
             {
-                Client client = (Client) _asyncResult.AsyncState;
+                Client client = (Client)_asyncResult.AsyncState;
                 client.socket.EndConnect(_asyncResult);
                 networkConfig.SetConfig(client.socket);
                 SendNetworkStatus(NetworkStatus.connected);
@@ -132,16 +132,24 @@ namespace KazNet.Core
                 if (packetSize > 0)
                 {
                     int index = 0;
-                    int packetLength;
+                    int dataLength;
+                    int packetCounter;
                     byte[] packetData;
                     do
                     {
-                        packetLength = BitConverter.ToUInt16(client.buffer, index);
+                        dataLength = BitConverter.ToUInt16(client.buffer, index) - 4;
                         index += 2;
-                        packetData = new byte[packetLength];
-                        Array.Copy(client.buffer, index, packetData, 0, packetLength);
-                        client.network.receivingWorker.Enqueue(new Packet(client.socket, packetData));
-                        index += packetLength;
+                        packetCounter = BitConverter.ToUInt16(client.buffer, index);
+                        index += 2;
+                        packetData = new byte[dataLength];
+                        Array.Copy(client.buffer, index, packetData, 0, dataLength);
+                        client.data.AddRange(packetData);
+                        if (packetCounter == 0)
+                        {
+                            client.network.receivingWorker.Enqueue(new Packet(client.socket, client.data));
+                            client.data = new();
+                        }
+                        index += dataLength;
                     }
                     while (index < packetSize);
                     client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
@@ -150,19 +158,35 @@ namespace KazNet.Core
             }
             catch (Exception exception)
             {
+                SendNetworkStatus(NetworkStatus.errorRecivePacket, client.socket);
+                Disconnect();
                 //  Log to file
                 //  Console.WriteLine(exception.ToString());
             }
-            SendNetworkStatus(NetworkStatus.errorRecivePacket, client.socket);
-            Disconnect();
         }
         void SendPacket(Packet _packet)
         {
             try
             {
-                byte[] packetData = new byte[_packet.data.Length + 2];
-                Array.Copy(BitConverter.GetBytes((ushort)_packet.data.Length), packetData, 2);
-                Array.Copy(_packet.data, 0, packetData, 2, _packet.data.Length);
+                int index = 0;
+                int dataLength = networkConfig.bufferSize - 4;
+                int packetCounter = _packet.data.Length / dataLength - ((_packet.data.Length % dataLength == 0) ? 1 : 0); ;
+                byte[] packetData;
+                for (int i = packetCounter; i > 0; i--)
+                {
+                    packetData = new byte[networkConfig.bufferSize];
+                    Array.Copy(BitConverter.GetBytes((ushort)networkConfig.bufferSize), packetData, 2);
+                    Array.Copy(BitConverter.GetBytes((ushort)i), 0, packetData, 2, 2);
+                    Array.Copy(_packet.data, index, packetData, 4, dataLength);
+                    index += dataLength;
+                    _packet.socket.BeginSend(packetData, 0, packetData.Length, SocketFlags.None, new AsyncCallback(SendPacketComplete), _packet.socket);
+                    client.network.nextSendEvent.WaitOne();
+                }
+                dataLength = _packet.data.Length - index;
+                packetData = new byte[dataLength + 4];
+                Array.Copy(BitConverter.GetBytes((ushort)packetData.Length), packetData, 2);
+                Array.Copy(BitConverter.GetBytes((ushort)0), 0, packetData, 2, 2);
+                Array.Copy(_packet.data, index, packetData, 4, dataLength);
                 _packet.socket.BeginSend(packetData, 0, packetData.Length, SocketFlags.None, new AsyncCallback(SendPacketComplete), _packet.socket);
                 client.network.nextSendEvent.WaitOne();
             }
@@ -188,10 +212,12 @@ namespace KazNet.Core
                 //  Console.WriteLine(exception.ToString());
             }
         }
+        void Decode(Packet _packet) { decodeMethod?.Invoke(_packet); }
 
         public void Send(byte[] _data) { Send(new Packet(client.socket, _data)); }
         public void Send(List<byte> _data) { Send(new Packet(client.socket, _data.ToArray())); }
         public void Send(Packet _packet) { client.network.sendingWorker.Enqueue(_packet); }
+
         public void Disconnect()
         {
             disconnectMethod?.Invoke(client.socket);
