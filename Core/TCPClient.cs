@@ -1,28 +1,25 @@
 ﻿using KazDev.Core;
 using System.Net.Sockets;
-using System.Net;
 
 namespace KazNet.Core
 {
     public class TCPClient
     {
         bool isRunning = false;
-        public NetworkStatus GetNetworkStatus { get => isRunning ? NetworkStatus.launched : NetworkStatus.stopped; }
-
+        public bool IsRunning { get { return isRunning; } }
+        AutoResetEvent clientEvent = new(true);
         NetworkConfig networkConfig;
         public string Address { get => networkConfig.address; }
         public ushort Port { get => networkConfig.port; }
-
         Client client;
-        AutoResetEvent clientEvent = new(true);
 
-        public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, Socket? _socket);
+        public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception);
         NetworkStatusMethod networkStatusMethod;
-        public delegate void ConnectMethod(Socket _socket);
+        public delegate void ConnectMethod(TcpClient _tcpClient);
         ConnectMethod connectMethod;
-        public delegate void DisconnectMethod(Socket _socket);
+        public delegate void DisconnectMethod(TcpClient _tcpClient);
         DisconnectMethod disconnectMethod;
-        public delegate void DecodeMethod(Packet _packet);
+        public delegate void DecodeMethod(NetworkPacket _networkPacket);
         DecodeMethod decodeMethod;
 
         public TCPClient(
@@ -46,7 +43,6 @@ namespace KazNet.Core
             if (!isRunning)
             {
                 isRunning = true;
-                SendNetworkStatus(NetworkStatus.started);
                 StartConnection();
             }
             clientEvent.Set();
@@ -58,170 +54,99 @@ namespace KazNet.Core
             {
                 isRunning = false;
                 //  Close threads
-                client.network.sendingWorker.Stop();
-                client.network.receivingWorker.Stop();
-                client.network.connectionWorker.Join();
+                client.networkThread.Stop();
                 //  Close client socket
-                client.socket.Close();
+                client.tcpClient.Close();
                 SendNetworkStatus(NetworkStatus.stopped);
             }
             clientEvent.Set();
         }
-
-        void SendNetworkStatus(NetworkStatus _networkStatus) { SendNetworkStatus(_networkStatus, null); }
-        void SendNetworkStatus(NetworkStatus _networkStatus, Socket? _socket)
-        {
-            networkStatusMethod?.Invoke(_networkStatus, _socket);
-        }
-
         void StartConnection()
         {
-            IPAddress ipAddress;
+            SendNetworkStatus(NetworkStatus.started);
             try
             {
-                if (!IPAddress.TryParse(networkConfig.address, out ipAddress))
-                {
-                    IPHostEntry ipHostInfo = Dns.GetHostEntry(networkConfig.address);
-                    ipAddress = ipHostInfo.AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork).FirstOrDefault();
-                }
-                client = new Client(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), new NetworkThread(), networkConfig.bufferSize);
+                client = new Client(new TcpClient(), new NetworkThread(), networkConfig.bufferSize);
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorConnection);
+                SendNetworkStatus(NetworkStatus.errorListener, exception.ToString());
                 Stop();
-                //  Log to file
-                //  Console.WriteLine(exception.ToString());
                 return;
             }
-            client.network.connectionWorker = new Thread(() =>
+            client.networkThread.connectionWorker = new Thread(() =>
             {
-                client.socket.BeginConnect(new IPEndPoint(ipAddress, networkConfig.port), new AsyncCallback(AcceptConnection), client);
+                client.tcpClient.BeginConnect(networkConfig.IPAddress, networkConfig.port, new AsyncCallback(AcceptConnection), client);
             });
-            client.network.receivingWorker = new QueueWorker<Packet>(Decode);
-            client.network.sendingWorker = new QueueWorker<Packet>(SendPacket);
-            client.network.sendingWorker.Start();
-            client.network.receivingWorker.Start();
-            client.network.connectionWorker.Start();
+            client.networkThread.receivingWorker = new QueueWorker<NetworkPacket>(Decode);
+            client.networkThread.sendingWorker = new QueueWorker<NetworkPacket>(SendStream);
+            client.networkThread.Start();
         }
         void AcceptConnection(IAsyncResult _asyncResult)
         {
             try
             {
                 Client client = (Client)_asyncResult.AsyncState;
-                client.socket.EndConnect(_asyncResult);
-                networkConfig.SetConfig(client.socket);
+                client.tcpClient.EndConnect(_asyncResult);
+                networkConfig.SetConfig(client.tcpClient);
                 SendNetworkStatus(NetworkStatus.connected);
-                connectMethod?.Invoke(client.socket);
-                client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
+                connectMethod?.Invoke(client.tcpClient);
+                //ssl stream
+                //
+                client.stream = (NetworkStream)client.tcpClient.GetStream();
+                client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
+                //
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorConnection, client.socket);
+                SendNetworkStatus(NetworkStatus.errorConnection, client.tcpClient, exception.ToString());
                 Stop();
-                //  Log to file
-                //  Console.WriteLine(exception.ToString());
             }
         }
-        void ReceivePacket(IAsyncResult _asyncResult)
+        void ReadStream(IAsyncResult _asyncResult)
         {
-            Client client = (Client)_asyncResult.AsyncState;
             try
             {
-                int packetSize = client.socket.EndReceive(_asyncResult);
+                Client client = (Client)_asyncResult.AsyncState;
+                int packetSize = client.stream.EndRead(_asyncResult);
                 if (packetSize > 0)
                 {
-                    int index = 0;
-                    int dataLength;
-                    int packetCounter;
-                    byte[] packetData;
-                    do
+                    client.data.AddRange(client.buffer.Take(packetSize).ToArray());
+                    int packetLength = BitConverter.ToInt32(client.data.Take(4).ToArray());
+                    while (packetLength <= client.data.Count)
                     {
-                        dataLength = BitConverter.ToUInt16(client.buffer, index) - 4;
-                        index += 2;
-                        packetCounter = BitConverter.ToUInt16(client.buffer, index);
-                        index += 2;
-                        packetData = new byte[dataLength];
-                        Array.Copy(client.buffer, index, packetData, 0, dataLength);
-                        client.data.AddRange(packetData);
-                        if (packetCounter == 0)
-                        {
-                            client.network.receivingWorker.Enqueue(new Packet(client.socket, client.data));
-                            client.data = new();
-                        }
-                        index += dataLength;
+                        client.networkThread.receivingWorker.Enqueue(new NetworkPacket(client.tcpClient, client.data.Skip(4).Take(packetLength - 4).ToArray()));
+                        client.data = client.data.Skip(packetLength).ToList();
                     }
-                    while (index < packetSize);
-                    client.socket.BeginReceive(client.buffer, 0, networkConfig.bufferSize, SocketFlags.None, new AsyncCallback(ReceivePacket), client);
-                    return;
+                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                 }
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorRecivePacket, client.socket);
+                SendNetworkStatus(NetworkStatus.errorRecivePacket, client.tcpClient, exception.ToString());
                 Disconnect();
-                //  Log to file
-                //  Console.WriteLine(exception.ToString());
             }
         }
-        void SendPacket(Packet _packet)
+        void SendStream(NetworkPacket _packet)
         {
             try
             {
-                int index = 0;
-                int dataLength = networkConfig.bufferSize - 4;
-                int packetCounter = _packet.data.Length / dataLength - ((_packet.data.Length % dataLength == 0) ? 1 : 0); ;
-                byte[] packetData;
-                for (int i = packetCounter; i > 0; i--)
-                {
-                    packetData = new byte[networkConfig.bufferSize];
-                    Array.Copy(BitConverter.GetBytes((ushort)networkConfig.bufferSize), packetData, 2);
-                    Array.Copy(BitConverter.GetBytes((ushort)i), 0, packetData, 2, 2);
-                    Array.Copy(_packet.data, index, packetData, 4, dataLength);
-                    index += dataLength;
-                    _packet.socket.BeginSend(packetData, 0, packetData.Length, SocketFlags.None, new AsyncCallback(SendPacketComplete), _packet.socket);
-                    client.network.nextSendEvent.WaitOne();
-                }
-                dataLength = _packet.data.Length - index;
-                packetData = new byte[dataLength + 4];
-                Array.Copy(BitConverter.GetBytes((ushort)packetData.Length), packetData, 2);
-                Array.Copy(BitConverter.GetBytes((ushort)0), 0, packetData, 2, 2);
-                Array.Copy(_packet.data, index, packetData, 4, dataLength);
-                _packet.socket.BeginSend(packetData, 0, packetData.Length, SocketFlags.None, new AsyncCallback(SendPacketComplete), _packet.socket);
-                client.network.nextSendEvent.WaitOne();
+                client.stream.Write(BitConverter.GetBytes(4 + _packet.data.Length).Concat(_packet.data).ToArray());
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorSendPacket, _packet.socket);
-                //  Log to file
-                //  Console.WriteLine(exception.ToString());
-            }
-        }
-        void SendPacketComplete(IAsyncResult _asyncResult)
-        {
-            client.network.nextSendEvent.Set();
-            Socket socket = (Socket)_asyncResult.AsyncState;
-            try
-            {
-                socket.EndSend(_asyncResult);
-            }
-            catch (Exception exception)
-            {
-                SendNetworkStatus(NetworkStatus.errorSendPacket, socket);
-                //  Log to file
-                //  Console.WriteLine(exception.ToString());
-            }
-        }
-        void Decode(Packet _packet) { decodeMethod?.Invoke(_packet); }
+                SendNetworkStatus(NetworkStatus.errorSendPacket, client.tcpClient, exception.ToString());
 
-        public void Send(byte[] _data) { Send(new Packet(client.socket, _data)); }
-        public void Send(List<byte> _data) { Send(new Packet(client.socket, _data.ToArray())); }
-        public void Send(Packet _packet) { client.network.sendingWorker.Enqueue(_packet); }
-
-        public void Disconnect()
-        {
-            disconnectMethod?.Invoke(client.socket);
-            Stop();
+            }
         }
+        void SendNetworkStatus(NetworkStatus _networkStatus) { SendNetworkStatus(_networkStatus, null, null); }
+        void SendNetworkStatus(NetworkStatus _networkStatus, TcpClient? _tcpClient) { SendNetworkStatus(_networkStatus, _tcpClient, null); }
+        void SendNetworkStatus(NetworkStatus _networkStatus, string _exception) { SendNetworkStatus(_networkStatus, null, _exception); }
+        void SendNetworkStatus(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception) { networkStatusMethod?.Invoke(_networkStatus, _tcpClient, _exception); }
+        void Decode(NetworkPacket _networkPacket) { decodeMethod?.Invoke(_networkPacket); }
+        public void Send(byte[] _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
+        public void Send(List<byte> _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
+        public void Send(NetworkPacket _networkPacket) { _networkPacket.tcpClient = client.tcpClient; client.networkThread.sendingWorker.Enqueue(_networkPacket); }
+        public void Disconnect() { disconnectMethod?.Invoke(client.tcpClient); Stop(); }
     }
 }
