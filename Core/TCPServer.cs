@@ -9,15 +9,17 @@ namespace KazNet.Core
     public class TCPServer
     {
         bool isRunning = false;
-        public bool IsRunning { get { return isRunning; } }
         AutoResetEvent serverEvent = new(true);
         ServerNetworkConfig networkConfig;
-        public string Address { get => networkConfig.address; }
-        public ushort Port { get => networkConfig.port; }
         TcpListener server;
 
         ConcurrentDictionary<int, NetworkThread> networkThreads = new();
         ConcurrentDictionary<TcpClient, Client> clients = new();
+
+        public bool IsRunning { get { return isRunning; } }
+        public string Address { get => networkConfig.address; }
+        public ushort Port { get => networkConfig.port; }
+        public int ConnectionCount { get => networkThreads.Values.Sum(x => x.connectionCount); }
 
         public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception);
         NetworkStatusMethod networkStatusMethod;

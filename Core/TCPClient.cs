@@ -8,12 +8,13 @@ namespace KazNet.Core
     public class TCPClient
     {
         bool isRunning = false;
-        public bool IsRunning { get { return isRunning; } }
         AutoResetEvent clientEvent = new(true);
         NetworkConfig networkConfig;
+        Client client;
+
+        public bool IsRunning { get { return isRunning; } }
         public string Address { get => networkConfig.address; }
         public ushort Port { get => networkConfig.port; }
-        Client client;
 
         public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception);
         NetworkStatusMethod networkStatusMethod;
@@ -157,7 +158,7 @@ namespace KazNet.Core
         public void Send(List<byte> _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
         public void Send(NetworkPacket _networkPacket) { _networkPacket.tcpClient = client.tcpClient; client.networkThread.sendingWorker.Enqueue(_networkPacket); }
         public void Disconnect() { disconnectMethod?.Invoke(client.tcpClient); Stop(); }
-        public virtual bool ValidateServerCertificate(object _sender, X509Certificate _certificate, X509Chain _chain, SslPolicyErrors _sslPolicyErrors)
+        bool ValidateServerCertificate(object _sender, X509Certificate _certificate, X509Chain _chain, SslPolicyErrors _sslPolicyErrors)
         {
             if (_sslPolicyErrors == SslPolicyErrors.None)
                 return true;
