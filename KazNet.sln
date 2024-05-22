@@ -10,11 +10,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{25BBD6
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Core", "Core\Core.csproj", "{4ABDE5A0-F99A-486E-9251-9C7496AB6A7B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core", "Core\Core.csproj", "{4ABDE5A0-F99A-486E-9251-9C7496AB6A7B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zTest", "Test\zTest.csproj", "{10AAE320-63AD-45CC-BAF6-1D273AEAAD76}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zTest", "Test\zTest.csproj", "{10AAE320-63AD-45CC-BAF6-1D273AEAAD76}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zTrash", "Trash\zTrash.csproj", "{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zTrash", "Trash\zTrash.csproj", "{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MsgSys", "MsgSys\MsgSys.csproj", "{58351051-6452-48C2-B5BF-15371414A375}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -34,6 +36,10 @@ Global
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Release|Any CPU.Build.0 = Release|Any CPU
+		{58351051-6452-48C2-B5BF-15371414A375}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58351051-6452-48C2-B5BF-15371414A375}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58351051-6452-48C2-B5BF-15371414A375}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58351051-6452-48C2-B5BF-15371414A375}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
