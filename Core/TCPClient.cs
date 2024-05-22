@@ -132,7 +132,7 @@ namespace KazNet.Core
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorRecivePacket, client.tcpClient, exception.ToString());
+                SendNetworkStatus(NetworkStatus.errorReadPacket, client.tcpClient, exception.ToString());
                 Disconnect();
             }
         }
@@ -161,8 +161,12 @@ namespace KazNet.Core
         {
             if (_sslPolicyErrors == SslPolicyErrors.None)
                 return true;
-            if(SslPolicyErrors.RemoteCertificateChainErrors == _sslPolicyErrors)
+            if (SslPolicyErrors.RemoteCertificateChainErrors == _sslPolicyErrors)
+            {
+                SendNetworkStatus(NetworkStatus.remoteCertificateChainErrors, _sslPolicyErrors.ToString());
                 return true;
+            }
+            SendNetworkStatus(NetworkStatus.invalidServerCertificate, _sslPolicyErrors.ToString());
             return false;
         }
     }

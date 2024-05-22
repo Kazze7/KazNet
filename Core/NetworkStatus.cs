@@ -8,8 +8,10 @@
         connected,
         errorListener,
         errorConnection,
-        errorRecivePacket,
+        errorReadPacket,
         errorSendPacket,
-        clientsLimit
+        connectionsLimit,
+        invalidServerCertificate,
+        remoteCertificateChainErrors
     }
 }

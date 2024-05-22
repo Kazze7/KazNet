@@ -158,7 +158,7 @@ namespace KazNet.Core
                     return;
                 }
                 else
-                    SendNetworkStatus(NetworkStatus.clientsLimit, tcpClient);
+                    SendNetworkStatus(NetworkStatus.connectionsLimit, tcpClient);
             Disconnect(tcpClient);
         }
         void ReadStream(IAsyncResult _asyncResult)
@@ -181,7 +181,7 @@ namespace KazNet.Core
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorRecivePacket, client.tcpClient, exception.ToString());
+                SendNetworkStatus(NetworkStatus.errorReadPacket, client.tcpClient, exception.ToString());
                 Disconnect(client.tcpClient);
             }
         }
