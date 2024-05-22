@@ -8,8 +8,7 @@ namespace KazNet.Core
         public Thread connectionWorker;
         public QueueWorker<NetworkPacket> receivingWorker;
         public QueueWorker<NetworkPacket> sendingWorker;
-        public AutoResetEvent nextClientEvent = new AutoResetEvent(false);
-        //public AutoResetEvent nextSendEvent = new AutoResetEvent(false);
+        public AutoResetEvent nextConnectionEvent = new AutoResetEvent(false);
 
         public void Start()
         {
@@ -21,7 +20,7 @@ namespace KazNet.Core
         {
             sendingWorker?.Stop();
             receivingWorker?.Stop();
-            nextClientEvent.Set();
+            nextConnectionEvent.Set();
             connectionWorker?.Join();
         }
     }

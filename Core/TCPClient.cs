@@ -1,5 +1,7 @@
 ﻿using KazDev.Core;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace KazNet.Core
 {
@@ -91,11 +93,18 @@ namespace KazNet.Core
                 networkConfig.SetConfig(client.tcpClient);
                 SendNetworkStatus(NetworkStatus.connected);
                 connectMethod?.Invoke(client.tcpClient);
-                //ssl stream
+                //  Ssl stream
+                if (networkConfig.useSsl)
+                {
+                    SslStream sslStream = new SslStream(client.tcpClient.GetStream(), false, new RemoteCertificateValidationCallback(ValidateServerCertificate), null);
+                    sslStream.AuthenticateAsClient(networkConfig.sslTargetHost);
+                    client.Stream = sslStream;
+                }
+                else
+                    client.Stream = (NetworkStream)client.tcpClient.GetStream();
+                client.streamEvent.Set();
                 //
-                client.stream = (NetworkStream)client.tcpClient.GetStream();
-                client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
-                //
+                client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
             }
             catch (Exception exception)
             {
@@ -108,7 +117,7 @@ namespace KazNet.Core
             try
             {
                 Client client = (Client)_asyncResult.AsyncState;
-                int packetSize = client.stream.EndRead(_asyncResult);
+                int packetSize = client.Stream.EndRead(_asyncResult);
                 if (packetSize > 0)
                 {
                     client.data.AddRange(client.buffer.Take(packetSize).ToArray());
@@ -118,7 +127,7 @@ namespace KazNet.Core
                         client.networkThread.receivingWorker.Enqueue(new NetworkPacket(client.tcpClient, client.data.Skip(4).Take(packetLength - 4).ToArray()));
                         client.data = client.data.Skip(packetLength).ToList();
                     }
-                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
+                    client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                 }
             }
             catch (Exception exception)
@@ -131,7 +140,7 @@ namespace KazNet.Core
         {
             try
             {
-                client.stream.Write(BitConverter.GetBytes(4 + _packet.data.Length).Concat(_packet.data).ToArray());
+                client.Stream.Write(BitConverter.GetBytes(4 + _packet.data.Length).Concat(_packet.data).ToArray());
             }
             catch (Exception exception)
             {
@@ -148,5 +157,13 @@ namespace KazNet.Core
         public void Send(List<byte> _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
         public void Send(NetworkPacket _networkPacket) { _networkPacket.tcpClient = client.tcpClient; client.networkThread.sendingWorker.Enqueue(_networkPacket); }
         public void Disconnect() { disconnectMethod?.Invoke(client.tcpClient); Stop(); }
+        public virtual bool ValidateServerCertificate(object _sender, X509Certificate _certificate, X509Chain _chain, SslPolicyErrors _sslPolicyErrors)
+        {
+            if (_sslPolicyErrors == SslPolicyErrors.None)
+                return true;
+            if(SslPolicyErrors.RemoteCertificateChainErrors == _sslPolicyErrors)
+                return true;
+            return false;
+        }
     }
 }

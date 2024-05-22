@@ -24,6 +24,8 @@ namespace KazNet.Core
         public ushort bufferSize = 8192;
         public int timeout = 1000;
         public bool noDelay = true;
+        public bool useSsl = false;
+        public string sslTargetHost = "";
 
         public void SetConfig(Socket _socket)
         {
@@ -38,7 +40,9 @@ namespace KazNet.Core
     public class ServerNetworkConfig : NetworkConfig
     {
         public int backLog = 100;
-        public ushort maxClients = 100;
+        public ushort maxConnections = 100;
+        public string sslFilePathPfx = "";
+        public string sslFilePassword = "";
 
         public void SetConfig(TcpListener _tcpListener) { SetConfig(_tcpListener.Server); }
     }

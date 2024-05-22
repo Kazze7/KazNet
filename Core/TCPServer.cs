@@ -1,6 +1,8 @@
 ﻿using KazDev.Core;
 using System.Collections.Concurrent;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace KazNet.Core
 {
@@ -101,11 +103,11 @@ namespace KazNet.Core
                 {
                     networkThread.connectionWorker = new Thread(() =>
                     {
-                        networkThreads[id].nextClientEvent.WaitOne();
+                        networkThreads[id].nextConnectionEvent.WaitOne();
                         while (isRunning)
                         {
                             server.BeginAcceptTcpClient(new AsyncCallback(AcceptConnection), networkThreads[id]);
-                            networkThreads[id].nextClientEvent.WaitOne();
+                            networkThreads[id].nextConnectionEvent.WaitOne();
                         }
                     });
                     networkThread.receivingWorker = new QueueWorker<NetworkPacket>(Decode);
@@ -113,12 +115,12 @@ namespace KazNet.Core
                     networkThread.Start();
                 }
             }
-            UnlockNextClient();
+            UnlockNextConnection();
         }
-        void UnlockNextClient() { networkThreads.Values.OrderBy(x => x.connectionCount).FirstOrDefault()?.nextClientEvent.Set(); }
+        void UnlockNextConnection() { networkThreads.Values.OrderBy(x => x.connectionCount).FirstOrDefault()?.nextConnectionEvent.Set(); }
         void AcceptConnection(IAsyncResult _asyncResult)
         {
-            UnlockNextClient();
+            UnlockNextConnection();
             NetworkThread networkThread = (NetworkThread)_asyncResult.AsyncState;
             TcpClient tcpClient;
             try
@@ -131,7 +133,7 @@ namespace KazNet.Core
                 return;
             }
             if (IsRunning)
-                if (clients.Count < networkConfig.maxClients)
+                if (clients.Count < networkConfig.maxConnections)
                 {
                     networkConfig.SetConfig(tcpClient);
                     Client client = new Client(tcpClient, networkThread, networkConfig.bufferSize);
@@ -141,11 +143,18 @@ namespace KazNet.Core
                         networkThread.connectionCount++;
                         connectMethod?.Invoke(client.tcpClient);
                     }
-                    //ssl stream
+                    //  Ssl stream
+                    if (networkConfig.useSsl)
+                    {
+                        SslStream sslStream = new SslStream(client.tcpClient.GetStream(), false);
+                        sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
+                        client.Stream = sslStream;
+                    }
+                    else
+                        client.Stream = (NetworkStream)client.tcpClient.GetStream();
+                    client.streamEvent.Set();
                     //
-                    client.stream = (NetworkStream)client.tcpClient.GetStream();
-                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
-                    //
+                    client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                     return;
                 }
                 else
@@ -157,7 +166,7 @@ namespace KazNet.Core
             Client client = (Client)_asyncResult.AsyncState;
             try
             {
-                int packetSize = client.stream.EndRead(_asyncResult);
+                int packetSize = client.Stream.EndRead(_asyncResult);
                 if (packetSize > 0)
                 {
                     client.data.AddRange(client.buffer.Take(packetSize).ToArray());
@@ -167,7 +176,7 @@ namespace KazNet.Core
                         client.networkThread.receivingWorker.Enqueue(new NetworkPacket(client.tcpClient, client.data.Skip(4).Take(packetLength - 4).ToArray()));
                         client.data = client.data.Skip(packetLength).ToList();
                     }
-                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
+                    client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                 }
             }
             catch (Exception exception)
@@ -181,7 +190,7 @@ namespace KazNet.Core
             if (clients.TryGetValue(_networkPacket.tcpClient, out Client client))
                 try
                 {
-                    client.stream.Write(BitConverter.GetBytes(4 + _networkPacket.data.Length).Concat(_networkPacket.data).ToArray());
+                    client.Stream.Write(BitConverter.GetBytes(4 + _networkPacket.data.Length).Concat(_networkPacket.data).ToArray());
                 }
                 catch (Exception exception)
                 {

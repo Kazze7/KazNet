@@ -5,7 +5,27 @@ namespace KazNet.Core
     class Client
     {
         public TcpClient tcpClient;
-        public Stream stream;
+        Stream stream;
+        public Stream Stream
+        {
+            get
+            {
+                if (stream != null)
+                {
+                    return stream;
+                }
+                else
+                {
+                    streamEvent.WaitOne();
+                    return stream;
+                }
+            }
+            set
+            {
+                stream = value;
+            }
+        }
+        public AutoResetEvent streamEvent = new AutoResetEvent(false);
         public NetworkThread networkThread;
         public byte[] buffer;
         public List<byte> data = new List<byte>();
