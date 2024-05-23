@@ -139,24 +139,23 @@ namespace KazNet.Core
                 {
                     networkConfig.SetConfig(tcpClient);
                     Client client = new Client(tcpClient, networkThread, networkConfig.bufferSize);
+                    //  Ssl stream
+                    if (networkConfig.useSsl)
+                    {
+                        SslStream sslStream = new SslStream(client.tcpClient.GetStream(), false);
+                        sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
+                        client.stream = sslStream;
+                    }
+                    else
+                        client.stream = (NetworkStream)client.tcpClient.GetStream();
                     //  Add new client
                     if (clients.TryAdd(client.tcpClient, client))
                     {
                         networkThread.connectionCount++;
                         connectMethod?.Invoke(client.tcpClient);
                     }
-                    //  Ssl stream
-                    if (networkConfig.useSsl)
-                    {
-                        SslStream sslStream = new SslStream(client.tcpClient.GetStream(), false);
-                        sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
-                        client.Stream = sslStream;
-                    }
-                    else
-                        client.Stream = (NetworkStream)client.tcpClient.GetStream();
-                    client.streamEvent.Set();
                     //
-                    client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
+                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                     return;
                 }
                 else
@@ -168,7 +167,7 @@ namespace KazNet.Core
             Client client = (Client)_asyncResult.AsyncState;
             try
             {
-                int packetSize = client.Stream.EndRead(_asyncResult);
+                int packetSize = client.stream.EndRead(_asyncResult);
                 if (packetSize > 0)
                 {
                     client.data.AddRange(client.buffer.Take(packetSize).ToArray());
@@ -178,7 +177,7 @@ namespace KazNet.Core
                         client.networkThread.receivingWorker.Enqueue(new NetworkPacket(client.tcpClient, client.data.Skip(4).Take(packetLength - 4).ToArray()));
                         client.data = client.data.Skip(packetLength).ToList();
                     }
-                    client.Stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
+                    client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
                 }
             }
             catch (Exception exception)
@@ -192,7 +191,7 @@ namespace KazNet.Core
             if (clients.TryGetValue(_networkPacket.tcpClient, out Client client))
                 try
                 {
-                    client.Stream.Write(BitConverter.GetBytes(4 + _networkPacket.data.Length).Concat(_networkPacket.data).ToArray());
+                    client.stream.Write(BitConverter.GetBytes(4 + _networkPacket.data.Length).Concat(_networkPacket.data).ToArray());
                 }
                 catch (Exception exception)
                 {
