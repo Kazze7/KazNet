@@ -12,7 +12,11 @@ namespace KazNet.MsgSys
         public NetworkMessageHandlerList messageHandlerList = new();
         public NetworkPermissionGroup newConnectionPermissionGroup = new();
 
-        public NetworkTCPServer(ServerNetworkConfig _networkConfig) : base(_networkConfig) { }
+        public NetworkTCPServer(ServerNetworkConfig _networkConfig, NetworkMessageHandlerList _messageHandlerList, NetworkPermissionGroup? _newConnectionPermissionGroup) : base(_networkConfig)
+        {
+            messageHandlerList = _messageHandlerList;
+            newConnectionPermissionGroup = _newConnectionPermissionGroup;
+        }
 
         public override void Stop()
         {

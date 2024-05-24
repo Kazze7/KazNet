@@ -9,7 +9,10 @@ namespace KazNet.MsgSys
         ConcurrentDictionary<NetworkThread, QueueWorker<NetworkThreadData>> networkThreads = new();
         public NetworkMessageHandlerList messageHandlerList = new();
 
-        public NetworkTCPClient(NetworkConfig _networkConfig) : base(_networkConfig) { }
+        public NetworkTCPClient(NetworkConfig _networkConfig, NetworkMessageHandlerList _messageHandlerList) : base(_networkConfig)
+        {
+            messageHandlerList = _messageHandlerList;
+        }
 
         public override void Stop()
         {

@@ -5,6 +5,9 @@
         List<NetworkMessageHandler> messageHandlers = new();
         Dictionary<NetworkMessageHandler, int> messageHandlersDictionary = new();
 
+        public NetworkMessageHandlerList() { }
+        public NetworkMessageHandlerList(params NetworkMessageHandler[] _messageHandler) { _messageHandler.ToList().ForEach(x => Add(x)); }
+
         public void Add(NetworkMessageHandler _messageHandler)
         {
             if (messageHandlersDictionary.TryAdd(_messageHandler, messageHandlers.Count))

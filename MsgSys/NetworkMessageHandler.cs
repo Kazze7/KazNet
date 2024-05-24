@@ -5,10 +5,10 @@
         public NetworkPermission permission;
         public NetworkThread thread;
 
-        public virtual void OnClient(NetworkTCPClient _networkTCPClient, NetworkMessage _networkMessage) { }
-        public virtual void OnServer(NetworkTCPServer _networkTCPServer, NetworkMessage _networkMessage) { }
+        public abstract void OnClient(NetworkTCPClient _networkTCPClient, NetworkMessage _networkMessage);
+        public abstract void OnServer(NetworkTCPServer _networkTCPServer, NetworkMessage _networkMessage);
 
-        public NetworkMessageHandler(NetworkPermission? _permission = null, NetworkThread? _thread = null)
+        public NetworkMessageHandler(NetworkPermission _permission, NetworkThread? _thread)
         {
             permission = _permission;
             thread = _thread;
