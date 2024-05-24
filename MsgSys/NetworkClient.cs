@@ -1,16 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Net.Sockets;
 
 namespace KazNet.MsgSys
 {
     public class NetworkClient
     {
         public TcpClient tcpClient;
-        public string id;
         public NetworkPermissionGroup permissionGroup;
+
+        public NetworkClient(TcpClient _tcpClient, NetworkPermissionGroup _permissionGroup)
+        {
+            tcpClient = _tcpClient;
+            permissionGroup = _permissionGroup;
+        }
     }
 }

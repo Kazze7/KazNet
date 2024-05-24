@@ -11,8 +11,8 @@ namespace KazNet.Core
             tcpServer = new TCPServer(_networkConfig, NetworkStatus, Connection, Disconnection, Decode);
         }
 
-        public void Start() { tcpServer.Start(); }
-        public void Stop() { tcpServer.Stop(); }
+        public virtual void Start() { tcpServer.Start(); }
+        public virtual void Stop() { tcpServer.Stop(); }
 
         public bool IsRunning { get => tcpServer.IsRunning; }
         public string Address { get => tcpServer.Address; }

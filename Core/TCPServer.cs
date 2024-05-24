@@ -19,7 +19,7 @@ namespace KazNet.Core
         public bool IsRunning { get { return isRunning; } }
         public string Address { get => networkConfig.address; }
         public ushort Port { get => networkConfig.port; }
-        public int ConnectionCount { get => networkThreads.Values.Sum(x => x.connectionCount); }
+        public int ConnectionCount { get => clients.Count; }
 
         public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception);
         NetworkStatusMethod networkStatusMethod;

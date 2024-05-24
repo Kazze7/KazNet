@@ -1,23 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace KazNet.MsgSys
+﻿namespace KazNet.MsgSys
 {
     public abstract class NetworkMessageHandler
     {
         public NetworkPermission permission;
         public NetworkThread thread;
-        //public virtual void OnClient(NetTCPClient _netTCPClient, NetPacket _netPacket) { }
-        //public virtual void OnServer(NetTCPServer _netTCPServer, NetPacket _netPacket) { }
 
-        public NetworkMessageHandler(NetworkPermission _permission = null, NetworkThread _thread = null)
+        public virtual void OnClient(NetworkTCPClient _networkTCPClient, NetworkMessage _networkMessage) { }
+        public virtual void OnServer(NetworkTCPServer _networkTCPServer, NetworkMessage _networkMessage) { }
+
+        public NetworkMessageHandler(NetworkPermission? _permission = null, NetworkThread? _thread = null)
         {
             permission = _permission;
             thread = _thread;
-            NetworkMessageHandlerList.Add(this);
         }
     }
 }

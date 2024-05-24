@@ -16,13 +16,13 @@ namespace KazNet.Core
         public string Address { get => networkConfig.address; }
         public ushort Port { get => networkConfig.port; }
 
-        public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception);
+        public delegate void NetworkStatusMethod(NetworkStatus _networkStatus, string? _exception);
         NetworkStatusMethod networkStatusMethod;
-        public delegate void ConnectMethod(TcpClient _tcpClient);
+        public delegate void ConnectMethod();
         ConnectMethod connectMethod;
-        public delegate void DisconnectMethod(TcpClient _tcpClient);
+        public delegate void DisconnectMethod();
         DisconnectMethod disconnectMethod;
-        public delegate void DecodeMethod(NetworkPacket _networkPacket);
+        public delegate void DecodeMethod(byte[] _data);
         DecodeMethod decodeMethod;
 
         public TCPClient(
@@ -103,13 +103,13 @@ namespace KazNet.Core
                     client.stream = (NetworkStream)client.tcpClient.GetStream();
                 //
                 SendNetworkStatus(NetworkStatus.connected);
-                connectMethod?.Invoke(client.tcpClient);
+                connectMethod?.Invoke();
                 //
                 client.stream.BeginRead(client.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), client);
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorConnection, client.tcpClient, exception.ToString());
+                SendNetworkStatus(NetworkStatus.errorConnection, exception.ToString());
                 Stop();
             }
         }
@@ -133,7 +133,7 @@ namespace KazNet.Core
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorReadPacket, client.tcpClient, exception.ToString());
+                SendNetworkStatus(NetworkStatus.errorReadPacket, exception.ToString());
                 Disconnect();
             }
         }
@@ -145,19 +145,16 @@ namespace KazNet.Core
             }
             catch (Exception exception)
             {
-                SendNetworkStatus(NetworkStatus.errorSendPacket, client.tcpClient, exception.ToString());
-
+                SendNetworkStatus(NetworkStatus.errorSendPacket, exception.ToString());
             }
         }
-        void SendNetworkStatus(NetworkStatus _networkStatus) { SendNetworkStatus(_networkStatus, null, null); }
-        void SendNetworkStatus(NetworkStatus _networkStatus, TcpClient? _tcpClient) { SendNetworkStatus(_networkStatus, _tcpClient, null); }
-        void SendNetworkStatus(NetworkStatus _networkStatus, string _exception) { SendNetworkStatus(_networkStatus, null, _exception); }
-        void SendNetworkStatus(NetworkStatus _networkStatus, TcpClient? _tcpClient, string? _exception) { networkStatusMethod?.Invoke(_networkStatus, _tcpClient, _exception); }
-        void Decode(NetworkPacket _networkPacket) { decodeMethod?.Invoke(_networkPacket); }
+        void SendNetworkStatus(NetworkStatus _networkStatus) { SendNetworkStatus(_networkStatus, null); }
+        void SendNetworkStatus(NetworkStatus _networkStatus, string? _exception) { networkStatusMethod?.Invoke(_networkStatus, _exception); }
+        void Decode(NetworkPacket _networkPacket) { decodeMethod?.Invoke(_networkPacket.data); }
         public void Send(byte[] _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
         public void Send(List<byte> _data) { Send(new NetworkPacket(client.tcpClient, _data)); }
-        public void Send(NetworkPacket _networkPacket) { _networkPacket.tcpClient = client.tcpClient; client.networkThread.sendingWorker.Enqueue(_networkPacket); }
-        public void Disconnect() { disconnectMethod?.Invoke(client.tcpClient); Stop(); }
+        void Send(NetworkPacket _networkPacket) { _networkPacket.tcpClient = client.tcpClient; client.networkThread.sendingWorker.Enqueue(_networkPacket); }
+        public void Disconnect() { disconnectMethod?.Invoke(); Stop(); }
         bool ValidateServerCertificate(object _sender, X509Certificate _certificate, X509Chain _chain, SslPolicyErrors _sslPolicyErrors)
         {
             if (_sslPolicyErrors == SslPolicyErrors.None)

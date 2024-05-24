@@ -1,23 +1,25 @@
 ﻿namespace KazNet.MsgSys
 {
-    public static class NetworkMessageHandlerList
+    public class NetworkMessageHandlerList
     {
-        static List<NetworkMessageHandler> messageHandlers = new();
-        static Dictionary<NetworkMessageHandler, int> messageHandlersDictionary = new();
+        List<NetworkMessageHandler> messageHandlers = new();
+        Dictionary<NetworkMessageHandler, int> messageHandlersDictionary = new();
 
-        public static void Add(NetworkMessageHandler _messageHandler)
+        public void Add(NetworkMessageHandler _messageHandler)
         {
             if (messageHandlersDictionary.TryAdd(_messageHandler, messageHandlers.Count))
                 messageHandlers.Add(_messageHandler);
         }
-        public static int GetId(NetworkMessageHandler _messageHandler)
+        public bool GetMessageHandlerId(NetworkMessageHandler _messageHandler, out int _id)
         {
-            messageHandlersDictionary.TryGetValue(_messageHandler, out int id);
-            return id;
+            return messageHandlersDictionary.TryGetValue(_messageHandler, out _id);
         }
-        public static NetworkMessageHandler GetMessageHandler(int _id)
+        public bool GetMessageHandler(int _id, out NetworkMessageHandler _messageHandler)
         {
-            return messageHandlers[_id];
+            _messageHandler = messageHandlers.ElementAtOrDefault(_id);
+            if (_messageHandler != null)
+                return true;
+            return false;
         }
     }
 }
