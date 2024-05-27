@@ -1,4 +1,4 @@
-﻿namespace KazNet.SslCertificate
+﻿namespace KazNet.Ssl
 {
     public struct SslCertificateConfig
     {

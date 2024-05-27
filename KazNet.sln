@@ -16,8 +16,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zTest", "Test\zTest.csproj"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zTrash", "Trash\zTrash.csproj", "{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MsgSys", "MsgSys\MsgSys.csproj", "{58351051-6452-48C2-B5BF-15371414A375}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,10 +34,6 @@ Global
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B6C26CE1-35A7-4B3B-9221-C4BFB08BF908}.Release|Any CPU.Build.0 = Release|Any CPU
-		{58351051-6452-48C2-B5BF-15371414A375}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{58351051-6452-48C2-B5BF-15371414A375}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{58351051-6452-48C2-B5BF-15371414A375}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{58351051-6452-48C2-B5BF-15371414A375}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

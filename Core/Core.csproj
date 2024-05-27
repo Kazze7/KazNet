@@ -19,6 +19,9 @@
     <Reference Include="KazDev.Core">
       <HintPath>..\..\KazDev\bin\Debug\net6.0\KazDev.Core.dll</HintPath>
     </Reference>
+    <Reference Include="KazDev.UniqueID">
+      <HintPath>..\..\KazDev\bin\Debug\net6.0\KazDev.UniqueID.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace KazNet.SslCertificate
+namespace KazNet.Ssl
 {
     public static class SslCertificate
     {

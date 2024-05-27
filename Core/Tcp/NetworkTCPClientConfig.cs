@@ -1,9 +1,9 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 
-namespace KazNet.Core
+namespace KazNet.Tcp
 {
-    public class NetworkConfig
+    public class NetworkTCPClientConfig
     {
         public string address = "127.0.0.1";
         public IPAddress IPAddress
@@ -27,23 +27,13 @@ namespace KazNet.Core
         public bool useSsl = false;
         public string sslTargetHost = "";
 
-        public void SetConfig(Socket _socket)
+        public void SetConfig(TcpClient _tcpClient)
         {
-            _socket.NoDelay = noDelay;
-            _socket.ReceiveBufferSize = bufferSize;
-            _socket.ReceiveTimeout = timeout;
-            _socket.SendBufferSize = bufferSize;
-            _socket.SendTimeout = timeout;
+            _tcpClient.NoDelay = noDelay;
+            _tcpClient.ReceiveBufferSize = bufferSize;
+            _tcpClient.ReceiveTimeout = timeout;
+            _tcpClient.SendBufferSize = bufferSize;
+            _tcpClient.SendTimeout = timeout;
         }
-        public void SetConfig(TcpClient _tcpClient) { SetConfig(_tcpClient.Client); }
-    }
-    public class ServerNetworkConfig : NetworkConfig
-    {
-        public int backLog = 100;
-        public ushort maxConnections = 100;
-        public string sslFilePathPfx = "";
-        public string sslFilePassword = "";
-
-        public void SetConfig(TcpListener _tcpListener) { SetConfig(_tcpListener.Server); }
     }
 }

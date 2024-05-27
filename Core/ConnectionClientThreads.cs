@@ -2,13 +2,11 @@
 
 namespace KazNet.Core
 {
-    class NetworkThread
+    class ConnectionClientThreads
     {
-        public int connectionCount = 0;
         public Thread connectionWorker;
-        public QueueWorker<NetworkPacket> receivingWorker;
-        public QueueWorker<NetworkPacket> sendingWorker;
-        public AutoResetEvent nextConnectionEvent = new AutoResetEvent(false);
+        public QueueWorker<NetworkClientMessage> receivingWorker;
+        public QueueWorker<NetworkClientMessage> sendingWorker;
 
         public void Start()
         {
@@ -20,7 +18,6 @@ namespace KazNet.Core
         {
             sendingWorker?.Stop();
             receivingWorker?.Stop();
-            nextConnectionEvent.Set();
             connectionWorker?.Join();
         }
     }
