@@ -129,40 +129,40 @@ namespace KazNet.Tcp
             try
             {
                 tcpClient = listener.EndAcceptTcpClient(_asyncResult);
+                if (IsRunning)
+                    if (connections.Count < networkConfig.maxConnections)
+                    {
+                        networkConfig.SetConfig(tcpClient);
+                        //  Ssl stream
+                        Stream stream;
+                        if (networkConfig.useSsl)
+                        {
+                            SslStream sslStream = new SslStream(tcpClient.GetStream(), false);
+                            sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
+                            stream = sslStream;
+                        }
+                        else
+                            stream = (NetworkStream)tcpClient.GetStream();
+                        //  Add new client
+                        ClientEntity networkClient = new ClientEntity(UIDGenerator.NewID().ToUlong(), newConnectionPermissionGroup);
+                        ConnectionTCPServer connection = new ConnectionTCPServer(tcpClient, stream, networkClient, connectionThreads, networkConfig.bufferSize);
+                        if (connections.TryAdd(networkClient.UID, connection))
+                        {
+                            connectionThreads.connectionCount++;
+                            OnConnected(networkClient);
+                        }
+                        //
+                        connection.stream.BeginRead(connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), connection);
+                        return;
+                    }
+                    else
+                        OnStatusChange(NetworkStatus.connectionLimit);
             }
             catch (Exception exception)
             {
                 OnError(NetworkError.errorConnection, null, exception.ToString());
                 return;
             }
-            if (IsRunning)
-                if (connections.Count < networkConfig.maxConnections)
-                {
-                    networkConfig.SetConfig(tcpClient);
-                    //  Ssl stream
-                    Stream stream;
-                    if (networkConfig.useSsl)
-                    {
-                        SslStream sslStream = new SslStream(tcpClient.GetStream(), false);
-                        sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
-                        stream = sslStream;
-                    }
-                    else
-                        stream = (NetworkStream)tcpClient.GetStream();
-                    //  Add new client
-                    ClientEntity networkClient = new ClientEntity(UIDGenerator.NewID().ToUlong(), newConnectionPermissionGroup);
-                    ConnectionTCPServer connection = new ConnectionTCPServer(tcpClient, stream, networkClient, connectionThreads, networkConfig.bufferSize);
-                    if (connections.TryAdd(networkClient.UID, connection))
-                    {
-                        connectionThreads.connectionCount++;
-                        OnConnected(networkClient);
-                    }
-                    //
-                    connection.stream.BeginRead(connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), connection);
-                    return;
-                }
-                else
-                    OnStatusChange(NetworkStatus.connectionLimit);
             tcpClient?.Close();
         }
         void ReadStream(IAsyncResult _asyncResult)
