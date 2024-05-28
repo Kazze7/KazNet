@@ -2,6 +2,7 @@
 using KazDev.UniqueID;
 using KazNet.Core;
 using System.Collections.Concurrent;
+using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -14,6 +15,7 @@ namespace KazNet.Tcp
         AutoResetEvent serverEvent = new(true);
         NetworkTCPServerConfig networkConfig;
         TcpListener listener;
+        X509Certificate2 certificate;
 
         ConcurrentDictionary<int, ConnectionServerThreads> connectionThreadsDictionary = new();
         ConcurrentDictionary<ulong, ConnectionTCPServer> connections = new();
@@ -33,6 +35,8 @@ namespace KazNet.Tcp
             networkConfig = _networkConfig;
             messageHandlerList = _messageHandlerList;
             newConnectionPermissionGroup = _newConnectionPermissionGroup;
+            if (networkConfig.useSsl)
+                certificate = new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword);
         }
 
         public abstract void OnConnected(ClientEntity _clientData);
@@ -86,7 +90,7 @@ namespace KazNet.Tcp
             try
             {
                 listener = new TcpListener(networkConfig.IPAddress, networkConfig.port);
-                //networkConfig.SetConfig(server);
+                //networkConfig.SetConfig(listener.Server);
                 listener.Start(networkConfig.backLog);
                 OnStatusChange(NetworkStatus.launched);
             }
@@ -125,10 +129,9 @@ namespace KazNet.Tcp
         {
             UnlockNextConnection();
             ConnectionServerThreads connectionThreads = (ConnectionServerThreads)_asyncResult.AsyncState;
-            TcpClient tcpClient;
             try
             {
-                tcpClient = listener.EndAcceptTcpClient(_asyncResult);
+                TcpClient tcpClient = listener.EndAcceptTcpClient(_asyncResult);
                 if (IsRunning)
                     if (connections.Count < networkConfig.maxConnections)
                     {
@@ -138,7 +141,7 @@ namespace KazNet.Tcp
                         if (networkConfig.useSsl)
                         {
                             SslStream sslStream = new SslStream(tcpClient.GetStream(), false);
-                            sslStream.AuthenticateAsServer(new X509Certificate2(networkConfig.sslFilePathPfx, networkConfig.sslFilePassword), false, true);
+                            sslStream.AuthenticateAsServer(certificate, false, false);
                             stream = sslStream;
                         }
                         else
@@ -153,7 +156,6 @@ namespace KazNet.Tcp
                         }
                         //
                         connection.stream.BeginRead(connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), connection);
-                        return;
                     }
                     else
                         OnStatusChange(NetworkStatus.connectionLimit);
@@ -161,9 +163,7 @@ namespace KazNet.Tcp
             catch (Exception exception)
             {
                 OnError(NetworkError.errorConnection, null, exception.ToString());
-                return;
             }
-            tcpClient?.Close();
         }
         void ReadStream(IAsyncResult _asyncResult)
         {

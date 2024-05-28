@@ -56,7 +56,7 @@ namespace KazNet.Tcp
                     messageThreads.TryRemove(messageThread);
                 });
                 //  Close client socket
-                connection.tcpClient.Close();
+                connection.Close();
                 //  Clear dictionary
                 messageThreads = new();
                 OnStatusChange(NetworkStatus.stopped);
@@ -95,7 +95,7 @@ namespace KazNet.Tcp
                 if (networkConfig.useSsl)
                 {
                     SslStream sslStream = new SslStream(connection.tcpClient.GetStream(), false, new RemoteCertificateValidationCallback(ValidateServerCertificate), null);
-                    sslStream.AuthenticateAsClient(networkConfig.sslTargetHost);
+                    sslStream.AuthenticateAsClient(networkConfig.sslTargetHost, null, false);
                     connection.stream = sslStream;
                 }
                 else
