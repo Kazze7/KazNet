@@ -2,7 +2,6 @@
 using KazDev.UniqueID;
 using KazNet.Core;
 using System.Collections.Concurrent;
-using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -136,26 +135,17 @@ namespace KazNet.Tcp
                     if (connections.Count < networkConfig.maxConnections)
                     {
                         networkConfig.SetConfig(tcpClient);
+                        ClientEntity networkClient = new ClientEntity(UIDGenerator.NewID().ToUlong(), newConnectionPermissionGroup);
+                        ConnectionTCPServer connection = new ConnectionTCPServer(tcpClient, tcpClient.GetStream(), networkClient, connectionThreads, networkConfig.bufferSize);
                         //  Ssl stream
-                        Stream stream;
                         if (networkConfig.useSsl)
                         {
-                            SslStream sslStream = new SslStream(tcpClient.GetStream(), false);
-                            sslStream.AuthenticateAsServer(certificate, false, false);
-                            stream = sslStream;
-                        }
-                        else
-                            stream = (NetworkStream)tcpClient.GetStream();
-                        //  Add new client
-                        ClientEntity networkClient = new ClientEntity(UIDGenerator.NewID().ToUlong(), newConnectionPermissionGroup);
-                        ConnectionTCPServer connection = new ConnectionTCPServer(tcpClient, stream, networkClient, connectionThreads, networkConfig.bufferSize);
-                        if (connections.TryAdd(networkClient.UID, connection))
-                        {
-                            connectionThreads.connectionCount++;
-                            OnConnected(networkClient);
+                            connection.stream = new SslStream(tcpClient.GetStream(), false);
+                            ((SslStream)connection.stream).BeginAuthenticateAsServer(certificate, false, false, new AsyncCallback(AuthenticateAsServer), connection);
+                            return;
                         }
                         //
-                        connection.stream.BeginRead(connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), connection);
+                        AddNewConnection(connection);
                     }
                     else
                         OnStatusChange(NetworkStatus.connectionLimit);
@@ -164,6 +154,29 @@ namespace KazNet.Tcp
             {
                 OnError(NetworkError.errorConnection, null, exception.ToString());
             }
+        }
+        void AuthenticateAsServer(IAsyncResult _asyncResult)
+        {
+            ConnectionTCPServer connection = (ConnectionTCPServer)_asyncResult.AsyncState;
+            try
+            {
+                ((SslStream)connection.stream).EndAuthenticateAsServer(_asyncResult);
+            }
+            catch (Exception exception)
+            {
+                OnError(NetworkError.errorConnection, null, exception.ToString());
+                return;
+            }
+            AddNewConnection(connection);
+        }
+        void AddNewConnection(ConnectionTCPServer _connection)
+        {
+            if (connections.TryAdd(_connection.networkClient.UID, _connection))
+            {
+                _connection.connectionThreads.connectionCount++;
+                OnConnected(_connection.networkClient);
+            }
+            _connection.stream.BeginRead(_connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), _connection);
         }
         void ReadStream(IAsyncResult _asyncResult)
         {

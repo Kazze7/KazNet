@@ -91,26 +91,42 @@ namespace KazNet.Tcp
             {
                 connection.tcpClient.EndConnect(_asyncResult);
                 networkConfig.SetConfig(connection.tcpClient);
+                connection.stream = connection.tcpClient.GetStream();
                 //  Ssl stream
                 if (networkConfig.useSsl)
                 {
-                    SslStream sslStream = new SslStream(connection.tcpClient.GetStream(), false, new RemoteCertificateValidationCallback(ValidateServerCertificate), null);
-                    sslStream.AuthenticateAsClient(networkConfig.sslTargetHost, null, false);
-                    connection.stream = sslStream;
+                    connection.stream = new SslStream(connection.tcpClient.GetStream(), false, new RemoteCertificateValidationCallback(ValidateServerCertificate), null);
+                    ((SslStream)connection.stream).BeginAuthenticateAsClient(networkConfig.sslTargetHost, null, false, new AsyncCallback(AuthenticateAsClient), connection);
+                    return;
                 }
-                else
-                    connection.stream = (NetworkStream)connection.tcpClient.GetStream();
                 //
-                OnStatusChange(NetworkStatus.connected);
-                OnConnected();
-                //
-                connection.stream.BeginRead(connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), connection);
+                NewConnection(connection);
             }
             catch (Exception exception)
             {
                 OnError(NetworkError.errorConnection, exception.ToString());
                 Stop();
             }
+        }
+        void AuthenticateAsClient(IAsyncResult _asyncResult)
+        {
+            ConnectionTCPClient connection = (ConnectionTCPClient)_asyncResult.AsyncState;
+            try
+            {
+                ((SslStream)connection.stream).EndAuthenticateAsServer(_asyncResult);
+            }
+            catch (Exception exception)
+            {
+                OnError(NetworkError.errorConnection, exception.ToString());
+                return;
+            }
+            NewConnection(connection);
+        }
+        void NewConnection(ConnectionTCPClient _connection)
+        {
+            OnStatusChange(NetworkStatus.connected);
+            OnConnected();
+            _connection.stream.BeginRead(_connection.buffer, 0, networkConfig.bufferSize, new AsyncCallback(ReadStream), _connection);
         }
         void ReadStream(IAsyncResult _asyncResult)
         {
